@@ -6,9 +6,9 @@ mermaid.initialize({ startOnLoad:false });
 const log  = document.getElementById("log");
 const txt  = document.getElementById("txt");
 const send = document.getElementById("send");
-const dia  = document.getElementById("diagram");
+const dia  = document.getElementById("diagram");   // now a <div class="mermaid">
 
-let graph = "flowchart TD\n";
+let graph  = "flowchart TD\n";
 let lastId = "start";
 const history = [];
 
@@ -25,28 +25,22 @@ send.onclick = async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ history })
   });
-
   const j = await r.json();
 
-  /* ===== if server sent an error, show it and stop ===== */
-  if (j.error) {
-    append("bot", `⚠️ SERVER ERROR: ${j.error}`);
-    return;
-  }
+  if (j.error)  { append("bot", `⚠️ SERVER ERROR: ${j.error}`); return; }
+  if (j.end)    { append("bot", j.summary); return; }
 
-  /* ===== normal flow ===== */
-  if (j.end) {
-    append("bot", j.summary);
-    return;
-  }
-
+  /* ----- update flowchart ----- */
   const nodeId = uniq();
   graph += `${lastId} --> ${nodeId}\n`;
   graph += `${nodeId}["${escape(j.question)}"]\n`;
   lastId = nodeId;
-  dia.textContent = graph;
-  mermaid.run({ nodes:[dia] });
 
+  dia.removeAttribute("data-processed");  // allow re-render
+  dia.textContent = graph;
+  mermaid.init(undefined, dia);           // re-run just on this element
+
+  /* ----- show question ----- */
   append("bot", j.question);
   history.push({ role:"assistant", content: JSON.stringify(j) });
 };
