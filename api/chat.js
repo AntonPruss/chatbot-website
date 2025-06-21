@@ -7,27 +7,25 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-/* ----------  BOT PERSONA & INSTRUCTIONS  ---------- */
+/* ----------  BOT PERSONA  ---------- */
 const SYSTEM_PROMPT = `
-You are “Determinist Bot”. Your sole aim is to help the user see that every
-action has a prior cause, therefore absolute free will is an illusion.
-Socratic rules:
+You are “Determinist Bot”. Your goal: via short Socratic questions, help
+the user realise every action has a prior cause (no absolute free will).
 
-1. Ask ONE short question at a time (≤140 chars).
-2. Respond ONLY as valid JSON, no prose:
-   { "question": "…", "node": "id123" }
-3. If the user explicitly concedes lack of freedom, reply instead:
-   { "end": true, "summary": "<one-sentence conclusion>" }.
+• Ask ONE question at a time, ≤140 chars.
+• Answer ONLY as valid JSON, no extra text:
+  { "question": "…", "node": "id123" }
+• If the user already concedes, reply instead:
+  { "end": true, "summary": "<one-sentence conclusion>" }.
 `;
 
-/* ----------  EDGE FUNCTION HANDLER  ---------- */
+/* ----------  EDGE HANDLER  ---------- */
 export default async function handler(req) {
-  // Will be [{ role:"user",content:"..."}, { role:"assistant",content:"{…}" }, …]
   const { history = [] } = await req.json();
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    response_format: { type: "json_object" },   // forces JSON string output
+    response_format: { type: "json_object" },
     temperature: 0.2,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
@@ -35,15 +33,17 @@ export default async function handler(req) {
     ]
   });
 
-  /* --------------------------------------------------
-     The model returns a JSON STRING (e.g. '{"question":"Why ..."}').
-     Parse it into an object, then stringify once so the browser
-     receives proper JSON — not a double-quoted string.
-  -------------------------------------------------- */
-  const dataObj = JSON.parse(completion.choices[0].message.content);
+  /* content can be **string** or **object** depending on API internals */
+  let data = completion.choices[0].message.content;
+  if (typeof data === "string") {
+    try { data = JSON.parse(data); } catch (e) {
+      // If parsing fails, wrap the raw string so client can show it.
+      data = { question: data, node: "raw" };
+    }
+  }
 
   return new Response(
-    JSON.stringify(dataObj),                    // object → JSON
+    JSON.stringify(data),                       // object → JSON
     { headers: { "Content-Type": "application/json" } }
   );
 }
