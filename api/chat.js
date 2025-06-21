@@ -23,8 +23,8 @@ export default async function handler(req) {
       ...history
     ]
   });
-  return new Response(
-    JSON.stringify(completion.choices[0].message.content),
-    { headers: { "Content-Type": "application/json" } }
-  );
+ return new Response(
+  completion.choices[0].message.content,
+  { headers: { "Content-Type": "application/json" } }
+);
 }
