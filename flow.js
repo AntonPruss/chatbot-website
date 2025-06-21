@@ -1,10 +1,12 @@
+// flow.js  – FULL FILE
+
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
 mermaid.initialize({ startOnLoad:false });
 
-const log = document.getElementById("log");
-const txt = document.getElementById("txt");
-const send= document.getElementById("send");
-const dia = document.getElementById("diagram");
+const log  = document.getElementById("log");
+const txt  = document.getElementById("txt");
+const send = document.getElementById("send");
+const dia  = document.getElementById("diagram");
 
 let graph = "flowchart TD\n";
 let lastId = "start";
@@ -13,15 +15,27 @@ const history = [];
 append("bot","Hi! What food did you pick for your last meal?");
 
 send.onclick = async () => {
-  if(!txt.value.trim()) return;
+  if (!txt.value.trim()) return;
   append("user", txt.value);
   history.push({ role:"user", content: txt.value });
   txt.value = "";
 
-  const r = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({history})});
+  const r  = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ history })
+  });
+
   const j = await r.json();
 
-  if(j.end){
+  /* ===== if server sent an error, show it and stop ===== */
+  if (j.error) {
+    append("bot", `⚠️ SERVER ERROR: ${j.error}`);
+    return;
+  }
+
+  /* ===== normal flow ===== */
+  if (j.end) {
     append("bot", j.summary);
     return;
   }
@@ -31,7 +45,7 @@ send.onclick = async () => {
   graph += `${nodeId}["${escape(j.question)}"]\n`;
   lastId = nodeId;
   dia.textContent = graph;
-  mermaid.run({nodes:[dia]});
+  mermaid.run({ nodes:[dia] });
 
   append("bot", j.question);
   history.push({ role:"assistant", content: JSON.stringify(j) });
@@ -39,7 +53,6 @@ send.onclick = async () => {
 
 function append(role,text){
   const d=document.createElement("div");
-  d.className="message";
   d.innerHTML=`<strong>${role}:</strong> ${escape(text)}`;
   log.appendChild(d); log.scrollTop=log.scrollHeight;
 }
