@@ -1,40 +1,30 @@
-// api/chat.js
+// api/chat.js   (Edge runtime)
+import OpenAI from "openai";
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+export const config = { runtime: "edge" };
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+const SYSTEM_PROMPT = `
+You are “Determinist Bot”. Your single goal: show the user every choice has
+a prior cause, so absolute free will is an illusion. Ask one Socratic
+question at a time. Reply as valid JSON ONLY:
+{ "question": "...", "node": "id" }.
+If the user already concedes, reply
+{ "end": true, "summary": "…" }.
+`;
 
-  try {
-    const { message } = req.body;
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
-
-    // Call the OpenAI Chat Completions API
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // The API key is stored securely as an environment variable in Vercel.
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o', // or your custom model
-        messages: [{ role: 'user', content: message }]
-      })
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`API error: ${err}`);
-    }
-
-    const data = await response.json();
-    const botReply = data.choices[0].message.content.trim();
-    return res.status(200).json({ reply: botReply });
-  } catch (error) {
-    console.error('Error:', error);
-    return res.status(500).json({ reply: "Sorry, I encountered an error." });
-  }
+export default async function handler(req) {
+  const { history = [] } = await req.json();
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    temperature: 0.2,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      ...history
+    ]
+  });
+  return new Response(
+    JSON.stringify(completion.choices[0].message.content),
+    { headers: { "Content-Type": "application/json" } }
+  );
 }
