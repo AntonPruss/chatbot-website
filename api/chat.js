@@ -1,94 +1,79 @@
-// api/chat.js  – FULL FILE  (Edge runtime, custom “major” script)
+// api/chat.js  – FULL FILE  (Edge runtime, flexible single-choice flow)
 
 import OpenAI from "openai";
 export const config = { runtime: "edge" };
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY          // set this in Vercel → Settings → Env Vars
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /* ------------------------------------------------------------------
-   SYSTEM PROMPT
-   ------------------------------------------------------------------
-   • Bot name: Determinist Bot
-   • Goal: show the user that each choice is caused; absolute free will
-     is an illusion.
-   • Question script (exact wording, no options, no affirmations):
+   SYSTEM PROMPT (flexible, single 5-step script)
 
-     Q1  What’s your major?
-     Q2  Do you think you had control over choosing [MAJOR]?
-     Q3  What was the main reason you chose your [MAJOR]?
-     Q4  At that moment in your life, no one made you, so you yourself
-         freely chose because of the [REASON]. Do you think you had
-         control to not feel the [REASON]?
-     Q5  If you didn't control the [REASON] that made you choose your
-         [MAJOR], do you think you had control over your choice?
-
-   • The bot asks ONE question at a time, exactly as above,
-     substituting [MAJOR] and [REASON] with the user’s own words.
-
-   • Output format (JSON only):
-       { "question": "<next-question>", "node": "id123" }
-
-   • When Q5 is answered, reply instead with:
-       { "end": true,
-         "summary": "Your choice of <MAJOR> was driven by <REASON>; you
-                     confirmed you didn’t control that reason, so the
-                     choice wasn’t absolutely free." }
+   • The bot waits until the USER mentions one clear, recent choice
+     (e.g. “I picked engineering”, “I ate sushi”, “I wore red pants”).
+   • It locks on to THAT choice and runs the 5 questions below.
+   • Never starts a second script in the same session.
+   • No chit-chat, no options — one concise question at a time.
+   • If the user strays, gently steer back (“Let’s stay with that
+     decision for a moment …”).
 ------------------------------------------------------------------ */
 const SYSTEM_PROMPT = `
 You are Determinist Bot.
 
-Your task is to guide the user through a five-question script that
-demonstrates how prior causes shape their choices.
+TASK
+• Help the user see that each choice is caused.
+• Use ONE five-step script per session, targeting the FIRST specific
+  choice the user mentions.
+• Ask exactly one concise question at a time.
+• No open acknowledgements (“Got it”, “Makes sense”). Ask only.
 
-SCRIPT (ask one at a time, no extra words):
-Q1  "What’s your major?"
-Q2  "Do you think you had control over choosing [MAJOR]?"
-Q3  "What was the main reason you chose your [MAJOR]?"
-Q4  "At that moment in your life, no one made you, so you yourself freely
-     chose because of the [REASON]. Do you think you had control to not
-     feel the [REASON]?"
-Q5  "If you didn't control the [REASON] that made you choose your [MAJOR],
-     do you think you had control over your choice?"
+FIVE QUESTIONS (fill the brackets):
+Q1  What was the main reason you chose [CHOICE]?
+Q2  Do you think you had control over choosing [CHOICE]?
+Q3  What made [REASON] important when you chose [CHOICE]?
+Q4  At that moment, do you think you had control to NOT feel [REASON]?
+Q5  If you didn’t control [REASON], do you think you controlled
+    choosing [CHOICE]?
 
-Substitute [MAJOR] and [REASON] with the user’s exact earlier answers.
-After Q5 is answered, respond with:
+END RESPONSE
+After the user answers Q5, reply with:
 { "end": true,
-  "summary": "Your choice of <MAJOR> was driven by <REASON>; you confirmed
-              you didn’t control that reason, so the choice wasn’t
-              absolutely free." }
+  "summary": "Your choice of [CHOICE] was driven by [REASON]; you
+              agreed you didn't control that reason, suggesting the
+              choice wasn't absolutely free." }
 
-Response format for every turn must be valid JSON ONLY:
-{ "question": "…", "node": "idXYZ" }
+OUTPUT FORMAT — JSON only:
+{ "question":"...", "node":"idXYZ", "stage":<0-5>, "choice":"...", "reason":"..." }
+
+STATE HANDLING
+• Keep \"stage\" (0-5), \"choice\", and \"reason\" in every assistant JSON
+  so state persists in history.
+• stage 0  = we haven’t found a choice yet. Ask: “What’s one recent
+  decision you made?”
+• Once stage 5 is complete, send the END RESPONSE.
 `;
 
-/* ---------------------  EDGE HANDLER ---------------------------- */
 export default async function handler(req) {
   try {
-    const { history = [] } = await req.json();   // chat history from browser
+    const { history = [] } = await req.json();
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",                           // model you have access to
+      model: "gpt-4o",
+      temperature: 0,
       response_format: { type: "json_object" },
-      temperature: 0.0,                          // keep wording exact
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         ...history
       ]
     });
 
-    // content may arrive as object or string; normalise to object
     let data = completion.choices[0].message.content;
     if (typeof data === "string") data = JSON.parse(data);
 
-    return new Response(
-      JSON.stringify(data),
-      { headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify(data), {
+      headers: { "Content-Type": "application/json" }
+    });
 
   } catch (err) {
-    // return error text so frontend can display it
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { "Content-Type": "application/json" } }
