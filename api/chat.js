@@ -1,4 +1,4 @@
-// api/chat.js  – FULL FILE  (Edge runtime, single-choice “last job” flow)
+// api/chat.js  – FULL FILE  (Edge runtime, conversational five-step flow)
 
 import OpenAI from "openai";
 export const config = { runtime: "edge" };
@@ -6,41 +6,36 @@ export const config = { runtime: "edge" };
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /* ------------------------------------------------------------------
-   SYSTEM PROMPT (one 5-question script about the last job)
+   SYSTEM PROMPT – conversational wording
 ------------------------------------------------------------------ */
 const SYSTEM_PROMPT = `
 You are Determinist Bot.
 
-• Your ONLY topic is the user's last job.  
-• Ask these five questions, one at a time, no chatty extras:
+• Your only topic is the user's **last job**.
+• Run exactly one five-question sequence, no small-talk, no extras.
+• Each assistant reply MUST be JSON only:
+  { "question":"...", "node":"id123", "stage":<0-4>, "job":"...", "reason":"..." }
 
-  Q0 "What was the last job you worked at?"
-  Q1 "Do you think you had control over choosing [JOB]?"
-  Q2 "What was the main reason you chose [JOB]?"
-  Q3 "At that moment in your life, no one made you, so you yourself
-      freely chose because of [REASON]. Do you think you had control to
-      NOT feel [REASON]?"
-  Q4 "If you didn't control [REASON] that made you choose [JOB], do you
-      think you had control over your choice?"
+QUESTIONS
+stage 0 → "What was the last job you worked at?"
+stage 1 → "Looking back, did choosing [JOB] feel like it was entirely your own decision?"
+stage 2 → "What was the single biggest factor that pushed you toward [JOB]?"
+stage 3 → "In that moment, do you think you could have felt differently about [REASON]?"
+stage 4 → "If you couldn’t choose whether to feel [REASON], would you say choosing [JOB] was fully under your control?"
 
-• Replace [JOB] and [REASON] with the user's own words.
-• After Q4 is answered, respond once with
-
+• Replace [JOB] and [REASON] with user words.
+• After the user answers stage 4, reply once with:
   { "end": true,
-    "summary": "Your choice of [JOB] was driven by [REASON]; you agreed
-               you didn't control that reason, suggesting the choice
-               wasn't absolutely free." }
+    "summary": "You said the biggest factor for choosing [JOB] was [REASON] and
+                acknowledged you couldn't control that feeling, suggesting the
+                choice wasn't absolutely free." }
 
-• Format every assistant message as JSON ONLY:
-
-  { "question":"...", "node":"idXYZ", "stage":<0-4>, "job":"...", "reason":"..." }
-
-• Keep "stage", "job", "reason" in every JSON reply so state persists.
+• If the user drifts, say: "Let’s stay with your choice of [JOB] for a moment."
 `;
 
 export default async function handler(req) {
   try {
-    const { history = [] } = await req.json();          // chat history
+    const { history = [] } = await req.json();
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -52,6 +47,7 @@ export default async function handler(req) {
       ]
     });
 
+    // content may be json string or object
     let data = completion.choices[0].message.content;
     if (typeof data === "string") data = JSON.parse(data);
 
