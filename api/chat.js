@@ -1,4 +1,4 @@
-// api/chat.js  – FULL FILE  (Edge runtime, conversational five-step flow)
+// api/chat.js  – FULL FILE  (Edge runtime, flexible branch + done guard)
 
 import OpenAI from "openai";
 export const config = { runtime: "edge" };
@@ -6,32 +6,51 @@ export const config = { runtime: "edge" };
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /* ------------------------------------------------------------------
-   SYSTEM PROMPT – conversational wording
+   SYSTEM PROMPT
 ------------------------------------------------------------------ */
 const SYSTEM_PROMPT = `
 You are Determinist Bot.
 
-• Your only topic is the user's **last job**.
-• Run exactly one five-question sequence, no small-talk, no extras.
-• Each assistant reply MUST be JSON only:
-  { "question":"...", "node":"id123", "stage":<0-4>, "job":"...", "reason":"..." }
+• Topic: the user's **last job** only.
+• Use JSON responses in *every* assistant turn, no extra text:
 
-QUESTIONS
-stage 0 → "What was the last job you worked at?"
-stage 1 → "Looking back, did choosing [JOB] feel like it was entirely your own decision?"
-stage 2 → "What was the single biggest factor that pushed you toward [JOB]?"
-stage 3 → "In that moment, do you think you could have felt differently about [REASON]?"
-stage 4 → "If you couldn’t choose whether to feel [REASON], would you say choosing [JOB] was fully under your control?"
+  { "question":"...", "node":"idXYZ",
+    "stage":<number or "done">,
+    "job":"...", "reason":"...", "cause":"..." }
 
-• Replace [JOB] and [REASON] with user words.
-• After the user answers stage 4, reply once with:
-  { "end": true,
-    "summary": "You said the biggest factor for choosing [JOB] was [REASON] and
-                acknowledged you couldn't control that feeling, suggesting the
-                choice wasn't absolutely free." }
+STAGES
+0 → ask:  "What was the last job you worked at?"
+1 → ask:  "Looking back, did choosing [JOB] feel like entirely your own decision?"
+2 → ask:  "What was the single biggest factor that pushed you toward [JOB]?"
+3 → ask:  "At the time, could you have felt differently about [REASON]?"  
+        • If user answers **no** → jump to 4  
+        • If user answers **yes** → go to 3.5
+3.5 → ask: "What do you think caused you to feel [REASON]?"
+4 → ask:  "Could you control [CAUSE]?"  (if stage 3 said *no*, set CAUSE=REASON)
 
-• If the user drifts, say: "Let’s stay with your choice of [JOB] for a moment."
+CONCLUDE
+• If user says **no** at stage 3 or stage 4, send once:
+
+  { "end":true, "stage":"done",
+    "summary":"You said your biggest factor for choosing [JOB] was
+               [REASON] and acknowledged you didn't control that
+               feeling/cause, suggesting the choice wasn't absolutely free." }
+
+• If user answers **yes** at both 3 and 4, send once:
+
+  { "end":true, "stage":"done",
+    "summary":"You felt you could have changed both your feeling and its
+               cause, suggesting that choice might have been more free
+               than determined." }
+
+RULES
+• After stage:"done" never start the script again.
+• If user digresses, reply with:
+  { "question":"Let's stay with your choice of [JOB] for a moment.", ... }
+  keeping the same stage number.
 `;
+
+/* ------------------------------------------------------------------ */
 
 export default async function handler(req) {
   try {
@@ -47,7 +66,6 @@ export default async function handler(req) {
       ]
     });
 
-    // content may be json string or object
     let data = completion.choices[0].message.content;
     if (typeof data === "string") data = JSON.parse(data);
 
