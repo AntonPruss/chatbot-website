@@ -1,4 +1,4 @@
-/* public/flow.js  – one-card Q+A, no duplicate text */
+/* One-pane infographic: question shows instantly, answer fills in row-2 */
 
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
 
@@ -9,41 +9,36 @@ mermaid.initialize({
   theme: "default"
 });
 
-/* -------- DOM refs -------- */
-const log  = document.getElementById("log");
 const txt  = document.getElementById("txt");
 const send = document.getElementById("send");
 const dia  = document.getElementById("diagram");
 
 /* -------- state -------- */
-let graph           = "flowchart TD\n";
+let graphLines      = ["flowchart TD"];
 let lastId          = "start";
-let pendingQuestion = "";        // holds question awaiting user answer
+let pendingNodeId   = null;
+let pendingQuestion = "";
 const history       = [];
 
-/* first backend question */
-awaitQuestion();                 // kicks things off
+/* get first backend question immediately */
+awaitQuestion();             // kicks off
 
-/* ===== UI handlers ===== */
 send.onclick = userTurn;
 txt.addEventListener("keydown", e => e.key === "Enter" && userTurn());
 
 async function userTurn() {
   if (!txt.value.trim()) return;
-  const userAnswer = txt.value.trim();
+  const answer = txt.value.trim();
   txt.value = "";
 
-  /* show only the USER line in the left pane */
-  appendUser(userAnswer);
+  /* place answer inside the pending node */
+  if (pendingNodeId) updateLastNode(pendingQuestion, answer);
 
-  /* draw card for previous Q + this A */
-  if (pendingQuestion) addCard(pendingQuestion, userAnswer);
-
-  history.push({ role: "user", content: userAnswer });
+  history.push({ role: "user", content: answer });
   await awaitQuestion();
 }
 
-/* ask backend, store *next* pendingQuestion */
+/* ----- backend round trip ----- */
 async function awaitQuestion() {
   const r = await fetch("/api/chat", {
     method: "POST",
@@ -52,45 +47,58 @@ async function awaitQuestion() {
   });
   const j = await r.json();
 
-  if (j.error) { appendUser(`⚠️ SERVER ERROR: ${j.error}`); return; }
+  if (j.error) { alert(j.error); return; }
 
-  if (j.end) {                      // final summary = last card only
-    addCard(pendingQuestion, j.summary);
+  if (j.end) {
+    /* fill answer row of final node (summary) */
+    if (pendingNodeId) updateLastNode(pendingQuestion, j.summary);
     return;
   }
 
-  pendingQuestion = j.question;     // save for next turn
+  /* draw new node with question + blank answer row */
+  pendingQuestion = j.question;
+  addQuestionNode(j.question);
   history.push({ role: "assistant", content: JSON.stringify(j) });
 }
 
-/* -------- helpers -------- */
+/* -------- diagram helpers -------- */
 
-function addCard(question, answer) {
+function addQuestionNode(question) {
   const nodeId = uniq();
-  graph += `${lastId} --> ${nodeId}\n`;
-  graph += `${nodeId}["${asHTML(question, answer)}"]:::qna\n`;
-  lastId = nodeId;
 
+  /* link from previous node */
+  graphLines.push(`${lastId} --> ${nodeId}`);
+
+  /* node with Q row + empty A row */
+  graphLines.push(`${nodeId}["${htmlTable(question,"")}"]:::qna`);
+  lastId        = nodeId;
+  pendingNodeId = nodeId;
+
+  render();
+}
+
+function updateLastNode(question, answer) {
+  const html = htmlTable(question, answer);
+  /* replace last graph line (node definition) */
+  graphLines[graphLines.length - 1] = `${pendingNodeId}["${html}"]:::qna`;
+  pendingNodeId = null;
+  render();
+}
+
+function render() {
   dia.removeAttribute("data-processed");
-  dia.textContent = graph;
+  dia.textContent = graphLines.join("\n");
   mermaid.init(undefined, dia);
 }
 
-function asHTML(q, a) {
-  const qBg = "#eef2ff";  // light indigo
-  const aBg = "#fff7ed";  // light orange
+function htmlTable(q, a) {
+  const qBg = "#eef2ff";     // light indigo
+  const aBg = "#fff7ed";     // light orange
   return `
 <table style='border-collapse:collapse;font-size:13px;border-radius:12px;overflow:hidden'>
   <tr><td style="padding:8px 14px;background:${qBg};font-weight:600">${esc(q)}</td></tr>
-  <tr><td style="padding:8px 14px;background:${aBg};">${esc(a)}</td></tr>
+  <tr><td style="padding:8px 14px;background:${aBg};">${esc(a || "&nbsp;")}</td></tr>
 </table>`;
-}
-
-function appendUser(text) {
-  const div = document.createElement("div");
-  div.innerHTML = `<strong>you:</strong> ${esc(text)}`;
-  log.appendChild(div);
-  log.scrollTop = log.scrollHeight;
 }
 
 function uniq()      { return "n" + Math.random().toString(36).slice(2, 8); }
