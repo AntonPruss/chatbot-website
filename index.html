@@ -10,17 +10,14 @@
       font-family:Inter,Arial,sans-serif;
       height:100vh;
       display:flex;
-      justify-content:center;          /* horizontal centre */
-      align-items:flex-start;          /* top-aligned */
+      justify-content:center;
+      align-items:flex-start;
       background:#fafafa;
     }
-    #diagramPane{
-      margin-top:32px;
-      overflow:auto;
-      max-width:90vw;
-    }
+    #diagramPane{margin-top:32px;overflow:auto;max-width:90vw}
     #diagram{width:max-content;max-width:100%}
-    /* style inputs inside nodes */
+
+    /* inside-node styles (overridden in flow.js HTML) */
     .nodeInput{
       width:100%;
       border:none;
@@ -28,6 +25,18 @@
       padding:8px 12px;
       font-size:13px;
       outline:none;
+      resize:none;
+      line-height:1.35;
+    }
+    .nodeBtn{
+      border:none;
+      background:#6366f1;
+      color:#fff;
+      padding:6px 14px;
+      margin-left:6px;
+      font-size:12px;
+      border-radius:6px;
+      cursor:pointer;
     }
   </style>
 
