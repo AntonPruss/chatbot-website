@@ -1,23 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>No-Free-Will Chat</title>
+  <meta charset="utf-8"/>
+  <title>No-Free-Will Flow</title>
 
-  <!-- basic reset -->
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Inter,Arial,sans-serif;height:100vh;display:flex;color:#222}
-    #chat{flex:1;display:flex;flex-direction:column;border-right:1px solid #e5e7eb}
-    #log{flex:1 1 auto;overflow:auto;padding:20px;line-height:1.5}
-    #log div{margin:8px 0;text-align:center}          /* centred messages */
-    #log strong{font-weight:600}
+    body{font-family:Inter,Arial,sans-serif;height:100vh;display:flex;flex-direction:column}
+    #diagramPane{flex:1 1 auto;overflow:auto;background:#fafafa;padding:24px}
+    #diagram{width:max-content;max-width:100%}
     #inputBar{display:flex;border-top:1px solid #e5e7eb}
-    #inputBar input{flex:1;border:none;padding:14px;font-size:15px}
-    #inputBar button{padding:0 24px;font-size:15px;border:none;background:#6366f1;color:#fff;cursor:pointer}
+    #inputBar input{flex:1;border:none;padding:16px;font-size:15px}
+    #inputBar button{padding:0 26px;font-size:15px;border:none;background:#6366f1;color:#fff;cursor:pointer}
     #inputBar input:focus{outline:none}
-    #diagramPane{flex:1;overflow:auto;padding:20px;background:#fafafa}
-    .mermaid{width:max-content;max-width:100%}
   </style>
 
   <!-- Mermaid -->
@@ -26,16 +21,13 @@
 </head>
 
 <body>
-  <div id="chat">
-    <div id="log"></div>
-    <div id="inputBar">
-      <input id="txt" placeholder="type your answer…">
-      <button id="send">Send</button>
-    </div>
-  </div>
-
   <div id="diagramPane">
     <div id="diagram" class="mermaid"></div>
+  </div>
+
+  <div id="inputBar">
+    <input id="txt" placeholder="type your answer…">
+    <button id="send">Send</button>
   </div>
 
   <script type="module" src="flow.js"></script>
