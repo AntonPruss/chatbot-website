@@ -1,20 +1,30 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
+  <meta charset="utf-8" />
   <title>No-Free-Will Chat</title>
+
+  <!-- basic reset -->
   <style>
-    body{font:14px/1.4 sans-serif;margin:0;display:flex;height:100vh}
-    #chat{flex:1;display:flex;flex-direction:column}
-    #log{flex:1 1 70%;overflow:auto;padding:12px}
-    #inputBar{display:flex}
-    #inputBar input{flex:1;padding:8px}
-    #inputBar button{padding:8px}
-    #diagram{flex:1 1 30%;border-left:1px solid #ddd;overflow:auto;padding:12px}
-    .message{margin:4px 0}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Inter,Arial,sans-serif;height:100vh;display:flex;color:#222}
+    #chat{flex:1;display:flex;flex-direction:column;border-right:1px solid #e5e7eb}
+    #log{flex:1 1 auto;overflow:auto;padding:20px;line-height:1.5}
+    #log div{margin:8px 0;text-align:center}          /* centred messages */
+    #log strong{font-weight:600}
+    #inputBar{display:flex;border-top:1px solid #e5e7eb}
+    #inputBar input{flex:1;border:none;padding:14px;font-size:15px}
+    #inputBar button{padding:0 24px;font-size:15px;border:none;background:#6366f1;color:#fff;cursor:pointer}
+    #inputBar input:focus{outline:none}
+    #diagramPane{flex:1;overflow:auto;padding:20px;background:#fafafa}
+    .mermaid{width:max-content;max-width:100%}
   </style>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs"></script>
+
+  <!-- Mermaid -->
+  <script type="module"
+    src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs"></script>
 </head>
+
 <body>
   <div id="chat">
     <div id="log"></div>
@@ -23,7 +33,11 @@
       <button id="send">Send</button>
     </div>
   </div>
-  <pre id="diagram" class="mermaid"></pre>
+
+  <div id="diagramPane">
+    <div id="diagram" class="mermaid"></div>
+  </div>
+
   <script type="module" src="flow.js"></script>
 </body>
 </html>
