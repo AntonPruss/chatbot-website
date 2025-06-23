@@ -1,6 +1,7 @@
+/* public/flow.js  – one-card Q+A, no duplicate text */
+
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
 
-/* Mermaid with HTML labels & loose security so we can inject <table> */
 mermaid.initialize({
   startOnLoad: false,
   securityLevel: "loose",
@@ -8,31 +9,42 @@ mermaid.initialize({
   theme: "default"
 });
 
+/* -------- DOM refs -------- */
 const log  = document.getElementById("log");
 const txt  = document.getElementById("txt");
 const send = document.getElementById("send");
 const dia  = document.getElementById("diagram");
 
-let graph  = "flowchart TD\n";
-let lastId = "start";
-const history = [];
+/* -------- state -------- */
+let graph           = "flowchart TD\n";
+let lastId          = "start";
+let pendingQuestion = "";        // holds question awaiting user answer
+const history       = [];
 
-/* first question comes from backend immediately */
-askAPI("");
+/* first backend question */
+awaitQuestion();                 // kicks things off
 
-send.onclick = () => userTurn();
-txt.addEventListener("keydown", e => (e.key === "Enter") && userTurn());
+/* ===== UI handlers ===== */
+send.onclick = userTurn;
+txt.addEventListener("keydown", e => e.key === "Enter" && userTurn());
 
 async function userTurn() {
   if (!txt.value.trim()) return;
-  append("user", txt.value);
-  history.push({ role: "user", content: txt.value });
-  const userText = txt.value;
+  const userAnswer = txt.value.trim();
   txt.value = "";
-  await askAPI(userText);
+
+  /* show only the USER line in the left pane */
+  appendUser(userAnswer);
+
+  /* draw card for previous Q + this A */
+  if (pendingQuestion) addCard(pendingQuestion, userAnswer);
+
+  history.push({ role: "user", content: userAnswer });
+  await awaitQuestion();
 }
 
-async function askAPI(content) {
+/* ask backend, store *next* pendingQuestion */
+async function awaitQuestion() {
   const r = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -40,45 +52,46 @@ async function askAPI(content) {
   });
   const j = await r.json();
 
-  if (j.error) { append("bot", `⚠️ SERVER ERROR: ${j.error}`); return; }
+  if (j.error) { appendUser(`⚠️ SERVER ERROR: ${j.error}`); return; }
 
-  if (j.end) {
-    append("bot", j.summary);
+  if (j.end) {                      // final summary = last card only
+    addCard(pendingQuestion, j.summary);
     return;
   }
 
-  /* ------------- build pretty node ------------- */
+  pendingQuestion = j.question;     // save for next turn
+  history.push({ role: "assistant", content: JSON.stringify(j) });
+}
+
+/* -------- helpers -------- */
+
+function addCard(question, answer) {
   const nodeId = uniq();
-  const html = nodeHTML(j.question, content);   // question|answer in one node
   graph += `${lastId} --> ${nodeId}\n`;
-  graph += `${nodeId}["${html}"]:::qna\n`;
+  graph += `${nodeId}["${asHTML(question, answer)}"]:::qna\n`;
   lastId = nodeId;
 
   dia.removeAttribute("data-processed");
   dia.textContent = graph;
   mermaid.init(undefined, dia);
-
-  append("bot", j.question);
-  history.push({ role: "assistant", content: JSON.stringify(j) });
 }
 
-function nodeHTML(question, answer) {
-  /* rounded rectangle with two rows, different subtle fills */
-  const qBg = "#eef2ff";  // soft indigo
-  const aBg = "#fff7ed";  // soft orange
+function asHTML(q, a) {
+  const qBg = "#eef2ff";  // light indigo
+  const aBg = "#fff7ed";  // light orange
   return `
 <table style='border-collapse:collapse;font-size:13px;border-radius:12px;overflow:hidden'>
-  <tr><td style="padding:8px 14px;background:${qBg};font-weight:600">${escape(question)}</td></tr>
-  <tr><td style="padding:8px 14px;background:${aBg};">${answer ? escape(answer) : ""}</td></tr>
+  <tr><td style="padding:8px 14px;background:${qBg};font-weight:600">${esc(q)}</td></tr>
+  <tr><td style="padding:8px 14px;background:${aBg};">${esc(a)}</td></tr>
 </table>`;
 }
 
-function append(role, text) {
+function appendUser(text) {
   const div = document.createElement("div");
-  div.innerHTML = `<strong>${role}:</strong> ${escape(text)}`;
+  div.innerHTML = `<strong>you:</strong> ${esc(text)}`;
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
 }
 
-function uniq()  { return "n" + Math.random().toString(36).slice(2, 8); }
-function escape(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,'&quot;'); }
+function uniq()      { return "n" + Math.random().toString(36).slice(2, 8); }
+function esc(str="") { return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
