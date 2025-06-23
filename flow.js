@@ -1,7 +1,12 @@
-// flow.js  – FULL FILE  (no hard-coded greeting)
-
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
-mermaid.initialize({ startOnLoad: false });
+
+/* Mermaid with HTML labels & loose security so we can inject <table> */
+mermaid.initialize({
+  startOnLoad: false,
+  securityLevel: "loose",
+  htmlLabels: true,
+  theme: "default"
+});
 
 const log  = document.getElementById("log");
 const txt  = document.getElementById("txt");
@@ -10,16 +15,15 @@ const dia  = document.getElementById("diagram");
 
 let graph  = "flowchart TD\n";
 let lastId = "start";
-const history = [];          // will hold user/assistant JSON exchanges
+const history = [];
 
-/* ----------------  kick off the first API call --------------- */
-askAPI("");                  // empty content → stage 0 question from server
+/* first question comes from backend immediately */
+askAPI("");
 
-/* ----------------  UI event handlers  ----------------------- */
-send.onclick = () => handleUser();
-txt.addEventListener("keydown", e => (e.key === "Enter") && handleUser());
+send.onclick = () => userTurn();
+txt.addEventListener("keydown", e => (e.key === "Enter") && userTurn());
 
-async function handleUser() {
+async function userTurn() {
   if (!txt.value.trim()) return;
   append("user", txt.value);
   history.push({ role: "user", content: txt.value });
@@ -43,17 +47,30 @@ async function askAPI(content) {
     return;
   }
 
-  /* ----- update flowchart ----- */
+  /* ------------- build pretty node ------------- */
   const nodeId = uniq();
+  const html = nodeHTML(j.question, content);   // question|answer in one node
   graph += `${lastId} --> ${nodeId}\n`;
-  graph += `${nodeId}["${escape(j.question)}"]\n`;
+  graph += `${nodeId}["${html}"]:::qna\n`;
   lastId = nodeId;
+
   dia.removeAttribute("data-processed");
   dia.textContent = graph;
   mermaid.init(undefined, dia);
 
   append("bot", j.question);
   history.push({ role: "assistant", content: JSON.stringify(j) });
+}
+
+function nodeHTML(question, answer) {
+  /* rounded rectangle with two rows, different subtle fills */
+  const qBg = "#eef2ff";  // soft indigo
+  const aBg = "#fff7ed";  // soft orange
+  return `
+<table style='border-collapse:collapse;font-size:13px;border-radius:12px;overflow:hidden'>
+  <tr><td style="padding:8px 14px;background:${qBg};font-weight:600">${escape(question)}</td></tr>
+  <tr><td style="padding:8px 14px;background:${aBg};">${answer ? escape(answer) : ""}</td></tr>
+</table>`;
 }
 
 function append(role, text) {
@@ -64,4 +81,4 @@ function append(role, text) {
 }
 
 function uniq()  { return "n" + Math.random().toString(36).slice(2, 8); }
-function escape(s){ return s.replace(/"/g, '\\"'); }
+function escape(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,'&quot;'); }
