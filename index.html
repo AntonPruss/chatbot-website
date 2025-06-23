@@ -6,16 +6,31 @@
 
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Inter,Arial,sans-serif;height:100vh;display:flex;flex-direction:column}
-    #diagramPane{flex:1 1 auto;overflow:auto;background:#fafafa;padding:24px}
+    body{
+      font-family:Inter,Arial,sans-serif;
+      height:100vh;
+      display:flex;
+      justify-content:center;          /* horizontal centre */
+      align-items:flex-start;          /* top-aligned */
+      background:#fafafa;
+    }
+    #diagramPane{
+      margin-top:32px;
+      overflow:auto;
+      max-width:90vw;
+    }
     #diagram{width:max-content;max-width:100%}
-    #inputBar{display:flex;border-top:1px solid #e5e7eb}
-    #inputBar input{flex:1;border:none;padding:16px;font-size:15px}
-    #inputBar button{padding:0 26px;font-size:15px;border:none;background:#6366f1;color:#fff;cursor:pointer}
-    #inputBar input:focus{outline:none}
+    /* style inputs inside nodes */
+    .nodeInput{
+      width:100%;
+      border:none;
+      background:#fff7ed;
+      padding:8px 12px;
+      font-size:13px;
+      outline:none;
+    }
   </style>
 
-  <!-- Mermaid -->
   <script type="module"
     src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs"></script>
 </head>
@@ -23,11 +38,6 @@
 <body>
   <div id="diagramPane">
     <div id="diagram" class="mermaid"></div>
-  </div>
-
-  <div id="inputBar">
-    <input id="txt" placeholder="type your answer…">
-    <button id="send">Send</button>
   </div>
 
   <script type="module" src="flow.js"></script>
