@@ -10,33 +10,26 @@
       font-family:Inter,Arial,sans-serif;
       height:100vh;
       display:flex;
-      justify-content:center;
-      align-items:flex-start;
+      justify-content:center;          /* centre horizontally */
+      align-items:flex-start;          /* stick to top */
       background:#fafafa;
     }
+    /* scrollable container for the SVG */
     #diagramPane{margin-top:32px;overflow:auto;max-width:90vw}
-    #diagram{width:max-content;max-width:100%}
+    /* let diagram keep natural width so Mermaid never auto-shrinks */
+    #diagram{width:max-content}
 
-    /* inside-node styles (overridden in flow.js HTML) */
+    /* default styles injected into nodes ------------------------ */
     .nodeInput{
-      width:100%;
-      border:none;
-      background:#fff7ed;
-      padding:8px 12px;
-      font-size:13px;
-      outline:none;
-      resize:none;
-      line-height:1.35;
+      flex:1 1 0;min-width:0;
+      border:none;background:#fff7ed;
+      padding:8px 12px;font-size:13px;line-height:1.35;
+      outline:none;resize:none;
     }
     .nodeBtn{
-      border:none;
-      background:#6366f1;
-      color:#fff;
-      padding:6px 14px;
-      margin-left:6px;
-      font-size:12px;
-      border-radius:6px;
-      cursor:pointer;
+      border:none;background:#6366f1;color:#fff;
+      padding:6px 14px;font-size:12px;border-radius:6px;
+      cursor:pointer;white-space:nowrap;
     }
   </style>
 
