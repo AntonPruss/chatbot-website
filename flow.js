@@ -1,16 +1,16 @@
-/* One-pane infographic: auto-growing textarea + single-line Send button
-   Enter key or button submits; diagram stays full-size. */
+/* flow.js – centred diagram, fluid card width, no stray nodes, smooth scroll */
 
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
 
 mermaid.initialize({
   startOnLoad:false,
-  securityLevel:"loose",    // allow HTML labels
+  securityLevel:"loose",
   htmlLabels:true,
   theme:"default"
 });
 
-const dia = document.getElementById("diagram");
+const dia          = document.getElementById("diagram");
+const diagramPane  = document.getElementById("diagramPane");
 
 /* ---------- conversation state ---------- */
 let graphLines      = ["flowchart TD"];
@@ -19,12 +19,12 @@ let pendingNodeId   = null;
 let pendingQuestion = "";
 const history       = [];
 
-/* first question immediately */
+/* get first question immediately */
 await backendRound();
 
 /* ---------------- helper: send answer ---------------- */
 async function sendAnswer(answer){
-  updateLastNode(pendingQuestion, answer);
+  updateNode(pendingQuestion, answer);            // put answer in card
   history.push({ role:"user", content:answer });
   await backendRound();
 }
@@ -40,7 +40,7 @@ async function backendRound(){
   if(j.error){ alert(j.error); return; }
 
   if(j.end){
-    updateLastNode(pendingQuestion, j.summary);
+    updateNode(pendingQuestion, j.summary);       // summary in same card
     return;
   }
 
@@ -48,7 +48,6 @@ async function backendRound(){
   addQuestionNode(j.question);
   history.push({ role:"assistant", content:JSON.stringify(j) });
 
-  /* attach events after SVG is in DOM */
   setTimeout(()=>attachControls(pendingNodeId),50);
 }
 
@@ -64,7 +63,7 @@ function attachControls(nodeId){
   ta.addEventListener("input", ()=>autoResize(ta));
 
   ta.addEventListener("keydown", e=>{
-    if(e.key==="Enter"){          // Enter always sends
+    if(e.key==="Enter"){                    // Enter sends
       e.preventDefault();
       btn.click();
     }
@@ -93,29 +92,34 @@ function addQuestionNode(question){
   render();
 }
 
-function updateLastNode(question, answer){
-  graphLines[graphLines.length-1] =
-    `${pendingNodeId}["${cardHTML(question, esc(answer))}"]:::qna`;
-  pendingNodeId = null;
-  render();
+function updateNode(question, answer){
+  /* Replace the CURRENT node definition (last line) */
+  if(pendingNodeId){
+    graphLines[graphLines.length-1] =
+      `${pendingNodeId}["${cardHTML(question, esc(answer))}"]:::qna`;
+    pendingNodeId = null;
+    render();
+  }
 }
 
+/* render + auto scroll */
 function render(){
-  dia.removeAttribute("data-processed");         // force re-render
+  dia.removeAttribute("data-processed");
   dia.textContent = graphLines.join("\n");
   mermaid.init(undefined, dia);
+  diagramPane.scrollTo({ top: diagramPane.scrollHeight, behavior:"smooth" });
 }
 
 /* ---------------- card & input HTML ------------------- */
 function cardHTML(q, a){
   const qBg="#eef2ff", aBg="#fff7ed";
   return `
-<table style="border-collapse:collapse;font-size:13px;border-radius:12px;overflow:hidden">
+<table style="border-collapse:collapse;font-size:13px;border-radius:12px;overflow:hidden;min-width:180px;max-width:320px">
   <tr><td style="padding:8px 14px;background:${qBg};font-weight:600;">
-        <div style="max-width:260px;word-wrap:break-word;">${esc(q)}</div>
+        <div style="word-wrap:break-word;white-space:normal;">${esc(q)}</div>
       </td></tr>
   <tr><td style="padding:0;background:${aBg};">
-        <div style="max-width:260px;word-wrap:break-word;">${a}</div>
+        <div style="word-wrap:break-word;white-space:normal;">${a}</div>
       </td></tr>
 </table>`;
 }
