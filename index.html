@@ -10,16 +10,20 @@
       font-family:Inter,Arial,sans-serif;
       height:100vh;
       display:flex;
-      justify-content:center;          /* centre horizontally */
-      align-items:flex-start;          /* stick to top */
+      justify-content:center;
+      align-items:flex-start;
       background:#fafafa;
     }
-    /* scrollable container for the SVG */
-    #diagramPane{margin-top:32px;overflow:auto;max-width:90vw}
-    /* let diagram keep natural width so Mermaid never auto-shrinks */
-    #diagram{width:max-content}
+    /* centre the diagram horizontally & make pane scrollable */
+    #diagramPane{
+      margin-top:32px;
+      overflow:auto;
+      max-width:90vw;
+      text-align:center;                 /* centre! */
+    }
+    #diagram{width:max-content;margin:0 auto}  /* keep true size */
 
-    /* default styles injected into nodes ------------------------ */
+    /* textarea & button defaults inserted inside nodes */
     .nodeInput{
       flex:1 1 0;min-width:0;
       border:none;background:#fff7ed;
@@ -30,6 +34,7 @@
       border:none;background:#6366f1;color:#fff;
       padding:6px 14px;font-size:12px;border-radius:6px;
       cursor:pointer;white-space:nowrap;
+      flex:0 0 auto;
     }
   </style>
 
