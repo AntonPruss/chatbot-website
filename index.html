@@ -14,19 +14,19 @@
     #diagramPane{margin-top:32px;overflow:auto;max-width:90vw;text-align:center}
     #diagram{width:max-content;margin:0 auto}
 
+    /* textarea + send button -------------------------- */
     .nodeInput{
       flex:1 1 0;min-width:0;border:none;background:#fff7ed;
       padding:8px 12px;font-size:13px;line-height:1.35;
       outline:none;resize:none;
     }
-    .nodeBtn,.micBtn{
+    .nodeBtn{
       border:none;background:#6366f1;color:#fff;
       padding:6px 14px;font-size:12px;border-radius:6px;
       cursor:pointer;white-space:nowrap;flex:0 0 auto;
-      display:flex;align-items:center;gap:4px;
     }
-    .micBtn.recording{background:#dc2626}           /* red while listening */
-    .micBtn svg{width:14px;height:14px;fill:#fff}
+    /* listening state */
+    .listening{background:#fee2e2!important}           /* light-red */
   </style>
 
   <script type="module"
