@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>No-Free-Will Flow (Voice)</title>
+  <title>No-Free-Will Flow (Voice + Wave)</title>
 
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -14,7 +14,7 @@
     #diagramPane{margin-top:32px;overflow:auto;max-width:90vw;text-align:center}
     #diagram{width:max-content;margin:0 auto}
 
-    /* textarea + send button -------------------------- */
+    /* textarea + send ---------------------------------- */
     .nodeInput{
       flex:1 1 0;min-width:0;border:none;background:#fff7ed;
       padding:8px 12px;font-size:13px;line-height:1.35;
@@ -22,11 +22,24 @@
     }
     .nodeBtn{
       border:none;background:#6366f1;color:#fff;
-      padding:6px 14px;font-size:12px;border-radius:6px;
+      padding:6px 18px;font-size:13px;border-radius:6px;
       cursor:pointer;white-space:nowrap;flex:0 0 auto;
     }
-    /* listening state */
-    .listening{background:#fee2e2!important}           /* light-red */
+    .listening{background:#fee2e2!important}
+
+    /* animated wave bars ------------------------------ */
+    .wave{display:flex;align-items:center;gap:3px;margin-left:8px}
+    .bar{
+      width:3px;background:#6366f1;border-radius:1px;
+      animation:wave 1s infinite cubic-bezier(.36,.45,.63,.53);
+    }
+    .bar:nth-child(2){animation-delay:-0.2s}
+    .bar:nth-child(3){animation-delay:-0.4s}
+    .bar:nth-child(4){animation-delay:-0.6s}
+    @keyframes wave{
+      0%,100%{height:6px}
+      50%    {height:18px}
+    }
   </style>
 
   <script type="module"
