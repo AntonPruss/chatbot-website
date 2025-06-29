@@ -1,56 +1,133 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <title>No-Free-Will Flow (Voice + Wave)</title>
+/* flow.js – auto-listen, live wave, colour cues */
 
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{
-      font-family:Inter,Arial,sans-serif;
-      height:100vh;display:flex;justify-content:center;align-items:flex-start;
-      background:#fafafa;
-    }
-    #diagramPane{margin-top:32px;overflow:auto;max-width:90vw;text-align:center}
-    #diagram{width:max-content;margin:0 auto}
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad:false, securityLevel:"loose", htmlLabels:true, theme:"default" });
 
-    /* textarea + send ---------------------------------- */
-    .nodeInput{
-      flex:1 1 0;min-width:0;border:none;background:#fff7ed;
-      padding:8px 12px;font-size:13px;line-height:1.35;
-      outline:none;resize:none;
-    }
-    .nodeBtn{
-      border:none;background:#6366f1;color:#fff;
-      padding:6px 18px;font-size:13px;border-radius:6px;
-      cursor:pointer;white-space:nowrap;flex:0 0 auto;
-    }
-    .listening{background:#fee2e2!important}
+const dia         = document.getElementById("diagram");
+const diagramPane = document.getElementById("diagramPane");
 
-    /* animated wave bars ------------------------------ */
-    .wave{display:flex;align-items:center;gap:3px;margin-left:8px}
-    .bar{
-      width:3px;background:#6366f1;border-radius:1px;
-      animation:wave 1s infinite cubic-bezier(.36,.45,.63,.53);
-    }
-    .bar:nth-child(2){animation-delay:-0.2s}
-    .bar:nth-child(3){animation-delay:-0.4s}
-    .bar:nth-child(4){animation-delay:-0.6s}
-    @keyframes wave{
-      0%,100%{height:6px}
-      50%    {height:18px}
-    }
-  </style>
+/* ---------- speech-synthesis (bot voice) ---------- */
+function speak(text){
+  try{ const u=new SpeechSynthesisUtterance(text); u.lang="en-US";
+       window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }catch{}
+}
 
-  <script type="module"
-    src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs"></script>
-</head>
+/* ---------- speech-recognition singleton ---------- */
+let rec; let silenceTimer;
+function getRec(){
+  if(rec) return rec;
+  const R=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!R) return null;
+  rec=new R(); rec.lang="en-US"; rec.interimResults=true; rec.continuous=true;
+  return rec;
+}
 
-<body>
-  <div id="diagramPane">
-    <div id="diagram" class="mermaid"></div>
+/* ---------- conversation state ---------- */
+let lines=["flowchart TD"];
+let lastId="start", pendingId=null, pendingQ="";
+const history=[];
+
+/* kick-off */
+await round();
+
+/* ---------- backend round ------------ */
+async function round(){
+  const r=await fetch("/api/chat",{method:"POST",headers:{ "Content-Type":"application/json"},body:JSON.stringify({history})});
+  const j=await r.json();
+  if(j.error){alert(j.error);return;}
+
+  if(j.end){ finishNode(j.summary); speak(j.summary); return;}
+
+  pendingQ=j.question;
+  addNode(j.question);
+  speak(j.question);
+  history.push({role:"assistant",content:JSON.stringify(j)});
+  setTimeout(()=>attachControls(pendingId),50);
+}
+
+/* ---------- diagram helpers ---------- */
+function addNode(question){
+  const id=uniq();
+  lines.push(`${lastId} --> ${id}`);
+  lines.push(`${id}["${card(question,inputHTML(id))}"]:::qna`);
+  lastId=id; pendingId=id; render();
+}
+function finishNode(answer){
+  lines[lines.length-1]=`${pendingId}["${card(pendingQ,esc(answer))}"]:::qna`;
+  pendingId=null; render();
+}
+function render(){
+  dia.removeAttribute("data-processed");
+  dia.textContent=lines.join("\n");
+  mermaid.init(undefined,dia);
+  diagramPane.scrollTo({top:diagramPane.scrollHeight,behavior:"smooth"});
+}
+
+/* ---------- build card + input HTML ---------- */
+function card(q,a){
+  const qBg="#eef2ff", aBg="#fff7ed";
+  return `
+<table style="border-collapse:collapse;font-size:13px;border-radius:12px;overflow:hidden;min-width:180px;max-width:340px">
+  <tr><td style="padding:8px 14px;background:${qBg};font-weight:600;">
+      <div style="word-wrap:break-word">${esc(q)}</div></td></tr>
+  <tr><td style="padding:0;background:${aBg};">
+      <div style="word-wrap:break-word">${a}</div></td></tr>
+</table>`;
+}
+function inputHTML(id){
+  return `
+<div style="display:flex;align-items:flex-start;padding:6px;gap:6px">
+  <textarea id="inp_${id}" class="nodeInput" rows="1"
+            placeholder="answer by voice or typing…"></textarea>
+  <div id="wave_${id}" class="wave" style="display:none">
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
   </div>
+  <button id="btn_${id}" class="nodeBtn">Send</button>
+</div>`;
+}
 
-  <script type="module" src="flow.js"></script>
-</body>
-</html>
+/* ---------- attach events to textarea & send ---------- */
+function attachControls(id){
+  const ta=document.getElementById("inp_"+id);
+  const btn=document.getElementById("btn_"+id);
+  const wave=document.getElementById("wave_"+id);
+  if(!ta||!btn) return;
+
+  autoSize(ta); ta.focus();
+  ta.addEventListener("input",()=>autoSize(ta));
+  ta.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();btn.click();}} );
+
+  btn.onclick=()=>{ const val=ta.value.trim(); if(val) submit(val); };
+
+  /* auto-start recognition if supported */
+  const SR=getRec();
+  if(!SR) return;
+
+  ta.classList.add("listening"); wave.style.display="flex";
+  SR.start(); SR.onresult=e=>{
+    clearTimeout(silenceTimer);
+    ta.value=Array.from(e.results).map(r=>r[0].transcript).join("");
+    autoSize(ta);
+    silenceTimer=setTimeout(stopAndSend,1000);           // 1 s silence
+  };
+  SR.onerror = ()=>stopRec();
+  SR.onend   = ()=>stopRec();
+
+  function stopRec(){ ta.classList.remove("listening"); wave.style.display="none"; }
+  function stopAndSend(){
+    SR.stop(); stopRec();
+    const fin=ta.value.trim(); if(fin) submit(fin);
+  }
+}
+
+/* ---------- submit wrapper ---------- */
+function submit(answer){
+  finishNode(answer);
+  history.push({role:"user",content:answer});
+  round();
+}
+
+/* ---------- utils ---------- */
+function autoSize(el){ el.style.height="auto"; el.style.height=el.scrollHeight+"px";}
+function uniq(){return"n"+Math.random().toString(36).slice(2,8);}
+function esc(s=""){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,'&quot;');}
