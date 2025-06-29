@@ -2,40 +2,31 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>No-Free-Will Flow</title>
+  <title>No-Free-Will Flow (Voice)</title>
 
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{
       font-family:Inter,Arial,sans-serif;
-      height:100vh;
-      display:flex;
-      justify-content:center;
-      align-items:flex-start;
+      height:100vh;display:flex;justify-content:center;align-items:flex-start;
       background:#fafafa;
     }
-    /* centre the diagram horizontally & make pane scrollable */
-    #diagramPane{
-      margin-top:32px;
-      overflow:auto;
-      max-width:90vw;
-      text-align:center;                 /* centre! */
-    }
-    #diagram{width:max-content;margin:0 auto}  /* keep true size */
+    #diagramPane{margin-top:32px;overflow:auto;max-width:90vw;text-align:center}
+    #diagram{width:max-content;margin:0 auto}
 
-    /* textarea & button defaults inserted inside nodes */
     .nodeInput{
-      flex:1 1 0;min-width:0;
-      border:none;background:#fff7ed;
+      flex:1 1 0;min-width:0;border:none;background:#fff7ed;
       padding:8px 12px;font-size:13px;line-height:1.35;
       outline:none;resize:none;
     }
-    .nodeBtn{
+    .nodeBtn,.micBtn{
       border:none;background:#6366f1;color:#fff;
       padding:6px 14px;font-size:12px;border-radius:6px;
-      cursor:pointer;white-space:nowrap;
-      flex:0 0 auto;
+      cursor:pointer;white-space:nowrap;flex:0 0 auto;
+      display:flex;align-items:center;gap:4px;
     }
+    .micBtn.recording{background:#dc2626}           /* red while listening */
+    .micBtn svg{width:14px;height:14px;fill:#fff}
   </style>
 
   <script type="module"
