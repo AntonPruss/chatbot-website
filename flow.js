@@ -1,4 +1,4 @@
-/* flow.js  – automatic speech input + speech-synthesis output */
+/* flow.js – auto-listen, live wave, colour cues */
 
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
 mermaid.initialize({ startOnLoad:false, securityLevel:"loose", htmlLabels:true, theme:"default" });
@@ -6,157 +6,128 @@ mermaid.initialize({ startOnLoad:false, securityLevel:"loose", htmlLabels:true, 
 const dia         = document.getElementById("diagram");
 const diagramPane = document.getElementById("diagramPane");
 
-/* ------------------------------------------------------------------ */
-/*  SECTION 1 : simple speech-synthesis helper                         */
-/* ------------------------------------------------------------------ */
+/* ---------- speech-synthesis (bot voice) ---------- */
 function speak(text){
-  try{
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang  = "en-US";
-    window.speechSynthesis.cancel();     // stop any previous speech
-    window.speechSynthesis.speak(utt);
-  }catch{ /* silently ignore if unsupported */ }
+  try{ const u=new SpeechSynthesisUtterance(text); u.lang="en-US";
+       window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }catch{}
 }
 
-/* ------------------------------------------------------------------ */
-/*  SECTION 2 : singleton speech-recogniser with silence timer        */
-/* ------------------------------------------------------------------ */
-let recogniser;
-let silenceTimer;
-function getRecognizer(){
-  if(recogniser) return recogniser;
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR) return null;
-  recogniser = new SR();
-  recogniser.lang            = "en-US";
-  recogniser.interimResults  = true;
-  recogniser.continuous      = true;
-  return recogniser;
-}
-/* start listening and stream interim text into textarea */
-function listenInto(textarea, onFinal){
-  const SR = getRecognizer();
-  if(!SR){ return; }
-
-  // reset textarea + style
-  textarea.value=""; autoResize(textarea);
-  textarea.classList.add("listening");
-
-  SR.start();
-  SR.onresult = e=>{
-    clearTimeout(silenceTimer);
-    const txt = Array.from(e.results).map(r=>r[0].transcript).join("");
-    textarea.value = txt; autoResize(textarea);
-
-    // restart silence timer – 1s
-    silenceTimer = setTimeout(()=>stopAndFinalize(),1000);
-
-    function stopAndFinalize(){
-      SR.stop();
-      textarea.classList.remove("listening");
-      const final = textarea.value.trim();
-      if(final) onFinal(final);
-    }
-  };
-  SR.onerror = ()=>{ SR.stop(); textarea.classList.remove("listening"); };
-  SR.onend   = ()=> textarea.classList.remove("listening"); // safety
+/* ---------- speech-recognition singleton ---------- */
+let rec; let silenceTimer;
+function getRec(){
+  if(rec) return rec;
+  const R=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!R) return null;
+  rec=new R(); rec.lang="en-US"; rec.interimResults=true; rec.continuous=true;
+  return rec;
 }
 
-/* ------------------------------------------------------------------ */
-/*  SECTION 3 : chat / diagram logic                                  */
-/* ------------------------------------------------------------------ */
-let graphLines = ["flowchart TD"];
-let lastId="start", pendingNodeId=null, pendingQuestion="";
+/* ---------- conversation state ---------- */
+let lines=["flowchart TD"];
+let lastId="start", pendingId=null, pendingQ="";
 const history=[];
 
-/* kick off */
-await backendRound();
+/* kick-off */
+await round();
 
-/* ---------------- backend interaction ---------------- */
-async function backendRound(){
-  const r = await fetch("/api/chat",{method:"POST",headers:{ "Content-Type":"application/json" },body:JSON.stringify({ history })});
-  const j = await r.json();
-  if(j.error){ alert(j.error); return; }
+/* ---------- backend round ------------ */
+async function round(){
+  const r=await fetch("/api/chat",{method:"POST",headers:{ "Content-Type":"application/json"},body:JSON.stringify({history})});
+  const j=await r.json();
+  if(j.error){alert(j.error);return;}
 
-  if(j.end){ updateNode(pendingQuestion, j.summary); speak(j.summary); return; }
+  if(j.end){ finishNode(j.summary); speak(j.summary); return;}
 
-  pendingQuestion = j.question;
-  addQuestionNode(j.question);
+  pendingQ=j.question;
+  addNode(j.question);
   speak(j.question);
-  history.push({ role:"assistant", content:JSON.stringify(j) });
-
-  setTimeout(()=>attachControls(pendingNodeId),50);
+  history.push({role:"assistant",content:JSON.stringify(j)});
+  setTimeout(()=>attachControls(pendingId),50);
 }
 
-/* ---------------- render helpers ---------------- */
-function addQuestionNode(question){
-  const nodeId = uniq();
-  graphLines.push(`${lastId} --> ${nodeId}`);
-  graphLines.push(`${nodeId}["${cardHTML(question, inputHTML(nodeId))}"]:::qna`);
-  lastId=nodeId; pendingNodeId=nodeId;
-  render();
+/* ---------- diagram helpers ---------- */
+function addNode(question){
+  const id=uniq();
+  lines.push(`${lastId} --> ${id}`);
+  lines.push(`${id}["${card(question,inputHTML(id))}"]:::qna`);
+  lastId=id; pendingId=id; render();
 }
-function updateNode(q,a){
-  graphLines[graphLines.length-1] = `${pendingNodeId}["${cardHTML(q, esc(a))}"]:::qna`;
-  pendingNodeId=null; render();
+function finishNode(answer){
+  lines[lines.length-1]=`${pendingId}["${card(pendingQ,esc(answer))}"]:::qna`;
+  pendingId=null; render();
 }
 function render(){
   dia.removeAttribute("data-processed");
-  dia.textContent = graphLines.join("\n");
-  mermaid.init(undefined, dia);
-  diagramPane.scrollTo({top:diagramPane.scrollHeight, behavior:"smooth"});
+  dia.textContent=lines.join("\n");
+  mermaid.init(undefined,dia);
+  diagramPane.scrollTo({top:diagramPane.scrollHeight,behavior:"smooth"});
 }
 
-/* ---------------- UI building ---------------- */
-function cardHTML(q,a){
+/* ---------- build card + input HTML ---------- */
+function card(q,a){
   const qBg="#eef2ff", aBg="#fff7ed";
   return `
-<table style="border-collapse:collapse;font-size:13px;border-radius:12px;overflow:hidden;min-width:180px;max-width:320px">
+<table style="border-collapse:collapse;font-size:13px;border-radius:12px;overflow:hidden;min-width:180px;max-width:340px">
   <tr><td style="padding:8px 14px;background:${qBg};font-weight:600;">
-      <div style="word-wrap:break-word;white-space:normal;">${esc(q)}</div></td></tr>
+      <div style="word-wrap:break-word">${esc(q)}</div></td></tr>
   <tr><td style="padding:0;background:${aBg};">
-      <div style="word-wrap:break-word;white-space:normal;">${a}</div></td></tr>
+      <div style="word-wrap:break-word">${a}</div></td></tr>
 </table>`;
 }
 function inputHTML(id){
   return `
 <div style="display:flex;align-items:flex-start;padding:6px;gap:6px">
-  <textarea id="inp_${id}" class="nodeInput" rows="1" placeholder="answer by voice or typing…"></textarea>
+  <textarea id="inp_${id}" class="nodeInput" rows="1"
+            placeholder="answer by voice or typing…"></textarea>
+  <div id="wave_${id}" class="wave" style="display:none">
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+  </div>
   <button id="btn_${id}" class="nodeBtn">Send</button>
 </div>`;
 }
 
-/* ---------------- attach controls to new node ---------------- */
-function attachControls(nodeId){
-  const ta  = document.getElementById("inp_"+nodeId);
-  const btn = document.getElementById("btn_"+nodeId);
+/* ---------- attach events to textarea & send ---------- */
+function attachControls(id){
+  const ta=document.getElementById("inp_"+id);
+  const btn=document.getElementById("btn_"+id);
+  const wave=document.getElementById("wave_"+id);
   if(!ta||!btn) return;
 
-  autoResize(ta); ta.focus();
+  autoSize(ta); ta.focus();
+  ta.addEventListener("input",()=>autoSize(ta));
+  ta.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();btn.click();}} );
 
-  // auto-start microphone
-  listenInto(ta, sendAnswer);
+  btn.onclick=()=>{ const val=ta.value.trim(); if(val) submit(val); };
 
-  ta.addEventListener("input", ()=>autoResize(ta));
-  ta.addEventListener("keydown", e=>{
-    if(e.key==="Enter"){ e.preventDefault(); btn.click(); }
-  });
-  btn.onclick = ()=>{
-    const val = ta.value.trim();
-    if(val) sendAnswer(val);
+  /* auto-start recognition if supported */
+  const SR=getRec();
+  if(!SR) return;
+
+  ta.classList.add("listening"); wave.style.display="flex";
+  SR.start(); SR.onresult=e=>{
+    clearTimeout(silenceTimer);
+    ta.value=Array.from(e.results).map(r=>r[0].transcript).join("");
+    autoSize(ta);
+    silenceTimer=setTimeout(stopAndSend,1000);           // 1 s silence
   };
+  SR.onerror = ()=>stopRec();
+  SR.onend   = ()=>stopRec();
+
+  function stopRec(){ ta.classList.remove("listening"); wave.style.display="none"; }
+  function stopAndSend(){
+    SR.stop(); stopRec();
+    const fin=ta.value.trim(); if(fin) submit(fin);
+  }
 }
 
-/* auto-height */
-function autoResize(el){ el.style.height="auto"; el.style.height= el.scrollHeight+"px"; }
-
-/* send & recurse */
-async function sendAnswer(answer){
-  updateNode(pendingQuestion, answer);
-  history.push({ role:"user", content:answer });
-  await backendRound();
+/* ---------- submit wrapper ---------- */
+function submit(answer){
+  finishNode(answer);
+  history.push({role:"user",content:answer});
+  round();
 }
 
-/* utils */
-function uniq(){ return "n"+Math.random().toString(36).slice(2,8); }
-function esc(s=""){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,'&quot;'); }
+/* ---------- utils ---------- */
+function autoSize(el){ el.style.height="auto"; el.style.height=el.scrollHeight+"px";}
+function uniq(){return"n"+Math.random().toString(36).slice(2,8);}
+function esc(s=""){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,'&quot;');}
