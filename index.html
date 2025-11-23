@@ -5,36 +5,102 @@
   <title>No-Free-Will Flow</title>
 
   <style>
+    :root{
+      color-scheme:light;
+      --bg:linear-gradient(135deg,#eef2ff,#fdf2f8);
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#475569;
+      --accent:#6366f1;
+      --accent-strong:#4f46e5;
+      --stroke:#e2e8f0;
+      --shadow:0 20px 80px rgba(15,23,42,0.12);
+    }
     *{box-sizing:border-box;margin:0;padding:0}
     body{
       font-family:Inter,Arial,sans-serif;
-      height:100vh;
+      min-height:100vh;
       display:flex;
       justify-content:center;
       align-items:flex-start;
-      background:#fafafa;
+      background:var(--bg);
+      color:var(--text);
+      padding:32px 18px 40px;
     }
+    main{
+      width:min(1100px,100%);
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+    }
+    header{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      background:rgba(255,255,255,0.7);
+      backdrop-filter:blur(8px);
+      border:1px solid var(--stroke);
+      box-shadow:var(--shadow);
+      border-radius:18px;
+      padding:18px 20px;
+    }
+    .headerRow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;}
+    header h1{font-size:24px;font-weight:700;letter-spacing:-0.01em;}
+    header p{color:var(--muted);font-size:14px;line-height:1.5;}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;
+      border-radius:999px;background:#0ea5e9;color:#fff;font-weight:700;
+      font-size:12px;letter-spacing:0.01em;box-shadow:0 10px 30px rgba(15,23,42,0.2);}
+
     /* centre the diagram horizontally & make pane scrollable */
     #diagramPane{
-      margin-top:32px;
       overflow:auto;
-      max-width:90vw;
-      text-align:center;                 /* centre! */
+      max-width:100%;
+      text-align:center;
+      padding:18px;
+      background:rgba(255,255,255,0.92);
+      border:1px solid var(--stroke);
+      border-radius:18px;
+      box-shadow:var(--shadow);
     }
-    #diagram{width:max-content;margin:0 auto}  /* keep true size */
+    #diagram{width:max-content;margin:0 auto}
 
     /* textarea & button defaults inserted inside nodes */
     .nodeInput{
       flex:1 1 0;min-width:0;
-      border:none;background:#fff7ed;
-      padding:8px 12px;font-size:13px;line-height:1.35;
+      border:1px solid var(--stroke);
+      background:#f8fafc;
+      padding:10px 12px;font-size:14px;line-height:1.5;
+      border-radius:12px;
       outline:none;resize:none;
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .nodeInput:focus{
+      border-color:var(--accent);
+      box-shadow:0 0 0 3px rgba(99,102,241,.15);
     }
     .nodeBtn{
-      border:none;background:#6366f1;color:#fff;
-      padding:6px 14px;font-size:12px;border-radius:6px;
+      border:none;background:var(--accent);color:#fff;
+      padding:10px 14px;font-size:13px;border-radius:12px;
       cursor:pointer;white-space:nowrap;
-      flex:0 0 auto;
+      flex:0 0 auto;font-weight:600;
+      transition:background .15s, transform .15s, box-shadow .15s;
+      box-shadow:0 10px 30px rgba(99,102,241,.28);
+    }
+    .nodeBtn:hover{background:var(--accent-strong);transform:translateY(-1px);}
+    .nodeBtn:active{transform:translateY(0);}
+
+    /* Mermaid overrides */
+    .mermaid svg{max-width:100%;height:auto;}
+    .card{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:14px;border:1px solid var(--stroke);background:var(--card);box-shadow:0 6px 28px rgba(15,23,42,0.12);max-width:520px;min-width:220px;}
+    .card .question{font-weight:700;color:var(--text);font-size:14px;line-height:1.5;}
+    .card .answer{background:#f8fafc;border:1px solid var(--stroke);border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.6;color:var(--muted);word-break:break-word;white-space:pre-wrap;text-align:left;}
+    .inputRow{display:flex;align-items:flex-start;padding:6px;gap:8px;}
+
+    @media (max-width:700px){
+      body{padding:18px 12px;}
+      header h1{font-size:20px;}
+      .card{max-width:100%;}
+      #diagramPane{padding:12px;}
     }
   </style>
 
@@ -43,9 +109,18 @@
 </head>
 
 <body>
-  <div id="diagramPane">
-    <div id="diagram" class="mermaid"></div>
-  </div>
+  <main>
+    <header>
+      <div class="headerRow">
+        <h1>Determinist Bot</h1>
+        <span id="modeBadge" class="badge" aria-live="polite">Checking backend…</span>
+      </div>
+      <p>A short reflective exercise about how free your last big career choice felt. The flow chart grows as you reply, keeping each step visible and tidy.</p>
+    </header>
+    <div id="diagramPane">
+      <div id="diagram" class="mermaid"></div>
+    </div>
+  </main>
 
   <script type="module" src="flow.js"></script>
 </body>

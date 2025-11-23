@@ -4,5 +4,8 @@
   "type": "module",
   "dependencies": {
     "openai": "^4.42.0"
+  },
+  "scripts": {
+    "start": "node server.js"
   }
 }
