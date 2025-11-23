@@ -3,7 +3,8 @@
 import OpenAI from "openai";
 export const config = { runtime: "edge" };
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const apiKey = process.env.OPENAI_API_KEY;
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 /* ------------------------------------------------------------------
    SYSTEM PROMPT
@@ -56,6 +57,12 @@ export default async function handler(req) {
   try {
     const { history = [] } = await req.json();
 
+    if (!openai) {
+      return new Response(JSON.stringify(mockDialog(history)), {
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       temperature: 0,
@@ -79,4 +86,48 @@ export default async function handler(req) {
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
+}
+
+function mockDialog(history){
+  const lastAssistant = [...history].reverse()
+    .find(msg => msg.role === "assistant" && looksLikeJSON(msg.content));
+  const state = lastAssistant ? JSON.parse(lastAssistant.content) : {};
+
+  const lastUser = [...history].reverse().find(msg => msg.role === "user");
+  const lastAnswer = lastUser?.content?.trim().toLowerCase() || "";
+
+  const job    = state.job || history.find(msg => msg.role === "user")?.content || "that role";
+  const reason = state.reason || lastAnswer || "a strong nudge";
+  const cause  = state.cause || lastAnswer || reason;
+
+  switch(String(state.stage || 0)){
+    case "0":
+      return { question:"What was the last job you worked at?", node: "mock0", stage:1 };
+    case "1":
+      return { question:`Looking back, did choosing ${job} feel like entirely your own decision?`, node:"mock1", stage:2, job };
+    case "2":
+      return { question:`What was the single biggest factor that pushed you toward ${job}?`, node:"mock2", stage:3, job };
+    case "3": {
+      const answeredNo = /\bno\b/.test(lastAnswer);
+      if (answeredNo) {
+        return { question:`Could you control ${reason}?`, node:"mock4", stage:4, job, reason, cause: reason };
+      }
+      return { question:`What do you think caused you to feel ${reason}?`, node:"mock35", stage:3.5, job, reason };
+    }
+    case "3.5":
+      return { question:`Could you control ${cause}?`, node:"mock4", stage:4, job, reason, cause };
+    case "4": {
+      const answeredNo = /\bno\b/.test(lastAnswer);
+      if (answeredNo) {
+        return { end:true, stage:"done", summary:`You said your biggest factor for choosing ${job} was ${reason} and acknowledged you didn't control that feeling/cause, suggesting the choice wasn't absolutely free.` };
+      }
+      return { end:true, stage:"done", summary:`You felt you could have changed both your feeling and its cause, suggesting that choice might have been more free than determined.` };
+    }
+    default:
+      return { end:true, stage:"done", summary: state.summary || "Session complete." };
+  }
+}
+
+function looksLikeJSON(text){
+  try{ JSON.parse(text); return true; }catch{ return false; }
 }

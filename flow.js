@@ -19,6 +19,18 @@ let pendingNodeId   = null;
 let pendingQuestion = "";
 const history       = [];
 
+/* Backend detection: fall back to mock when running on GitHub Pages
+   or if /api/chat is unreachable. A ?mode=mock URL param also forces
+   mock mode; ?mode=api forces an API attempt even on GitHub Pages. */
+const params     = new URLSearchParams(location.search);
+const forceMock  = params.get("mode") === "mock";
+const forceApi   = params.get("mode") === "api";
+const backendUrl = params.get("api") || "/api/chat";
+let   useMock    = forceMock || location.hostname.endsWith("github.io") || location.protocol === "file:";
+
+const modeBadge = document.getElementById("modeBadge");
+setModeBadge(useMock ? "mock" : "detect");
+
 /* get first question immediately */
 await backendRound();
 
@@ -29,14 +41,22 @@ async function sendAnswer(answer){
   await backendRound();
 }
 
+function setModeBadge(mode){
+  if(!modeBadge) return;
+  const map = {
+    detect:{ text:"Checking backend…", color:"#0ea5e9" },
+    api:{ text:"Live API", color:"#16a34a" },
+    mock:{ text:"Mock mode (no API)", color:"#eab308" },
+    fallback:{ text:"Mock mode (API unreachable)", color:"#f97316" }
+  };
+  const { text, color } = map[mode] || map.detect;
+  modeBadge.textContent = text;
+  modeBadge.style.background = color;
+}
+
 /* ---------------- backend interaction ---------------- */
 async function backendRound(){
-  const r = await fetch("/api/chat",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({ history })
-  });
-  const j = await r.json();
+  const j = await requestChat(history);
   if(j.error){ alert(j.error); return; }
 
   if(j.end){
@@ -49,6 +69,31 @@ async function backendRound(){
   history.push({ role:"assistant", content:JSON.stringify(j) });
 
   setTimeout(()=>attachControls(pendingNodeId),50);
+}
+
+async function requestChat(history){
+  if(useMock && !forceApi){
+    setModeBadge("mock");
+    return mockDialog(history);
+  }
+
+  try{
+    const r = await fetch(backendUrl,{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({ history })
+    });
+
+    if(!r.ok) throw new Error(`Backend returned ${r.status}`);
+    const data = await r.json();
+    setModeBadge("api");
+    return data;
+  }catch(err){
+    console.warn("Falling back to mock mode:", err);
+    useMock = true;
+    setModeBadge("fallback");
+    return mockDialog(history);
+  }
 }
 
 /* ---------------- attach textarea & button ------------- */
@@ -96,7 +141,7 @@ function updateNode(question, answer){
   /* Replace the CURRENT node definition (last line) */
   if(pendingNodeId){
     graphLines[graphLines.length-1] =
-      `${pendingNodeId}["${cardHTML(question, esc(answer))}"]:::qna`;
+      `${pendingNodeId}["${cardHTML(question, answerHTML(answer))}"]:::qna`;
     pendingNodeId = null;
     render();
   }
@@ -112,25 +157,66 @@ function render(){
 
 /* ---------------- card & input HTML ------------------- */
 function cardHTML(q, a){
-  const qBg="#eef2ff", aBg="#fff7ed";
+  const escapedQuestion = esc(q).replace(/\n/g, "<br>");
   return `
-<table style="border-collapse:collapse;font-size:13px;border-radius:12px;overflow:hidden;min-width:180px;max-width:320px">
-  <tr><td style="padding:8px 14px;background:${qBg};font-weight:600;">
-        <div style="word-wrap:break-word;white-space:normal;">${esc(q)}</div>
-      </td></tr>
-  <tr><td style="padding:0;background:${aBg};">
-        <div style="word-wrap:break-word;white-space:normal;">${a}</div>
-      </td></tr>
-</table>`;
+<div class="card">
+  <div class="question">${escapedQuestion}</div>
+  <div class="answer">${a}</div>
+</div>`;
+}
+
+function answerHTML(text){
+  return esc(text).replace(/\n/g, "<br>");
 }
 
 function inputHTML(id){
   return `
-<div style="display:flex;align-items:flex-start;padding:6px;gap:6px">
+<div class="inputRow">
   <textarea id="inp_${id}" class="nodeInput" rows="1"
             placeholder="your answer…"></textarea>
   <button id="btn_${id}" class="nodeBtn">Send</button>
 </div>`;
+}
+
+/* ---------------- mock dialog (browser-side) ------------------- */
+function mockDialog(history){
+  const lastAssistant = [...history].reverse()
+    .find(msg => msg.role === "assistant" && looksLikeJSON(msg.content));
+  const state = lastAssistant ? JSON.parse(lastAssistant.content) : {};
+
+  const lastUser  = [...history].reverse().find(msg => msg.role === "user");
+  const lastAnswer = lastUser?.content?.trim().toLowerCase() || "";
+
+  const job    = state.job || history.find(msg => msg.role === "user")?.content || "that role";
+  const reason = state.reason || lastAnswer || "a strong nudge";
+  const cause  = state.cause || lastAnswer || reason;
+
+  switch(String(state.stage || 0)){
+    case "0":
+      return { question:"What was the last job you worked at?", node: "mock0", stage:1 };
+    case "1":
+      return { question:`Looking back, did choosing ${job} feel like entirely your own decision?`, node:"mock1", stage:2, job };
+    case "2":
+      return { question:`What was the single biggest factor that pushed you toward ${job}?`, node:"mock2", stage:3, job };
+    case "3": {
+      const answeredNo = /\bno\b/.test(lastAnswer);
+      if (answeredNo) {
+        return { question:`Could you control ${reason}?`, node:"mock4", stage:4, job, reason, cause: reason };
+      }
+      return { question:`What do you think caused you to feel ${reason}?`, node:"mock35", stage:3.5, job, reason };
+    }
+    case "3.5":
+      return { question:`Could you control ${cause}?`, node:"mock4", stage:4, job, reason, cause };
+    case "4": {
+      const answeredNo = /\bno\b/.test(lastAnswer);
+      if (answeredNo) {
+        return { end:true, stage:"done", summary:`You said your biggest factor for choosing ${job} was ${reason} and acknowledged you didn't control that feeling/cause, suggesting the choice wasn't absolutely free.` };
+      }
+      return { end:true, stage:"done", summary:`You felt you could have changed both your feeling and its cause, suggesting that choice might have been more free than determined.` };
+    }
+    default:
+      return { end:true, stage:"done", summary: state.summary || "Session complete." };
+  }
 }
 
 /* ---------------- utility ---------------- */
@@ -138,3 +224,4 @@ function uniq(){ return "n"+Math.random().toString(36).slice(2,8); }
 function esc(s=""){ return s.replace(/&/g,"&amp;")
                            .replace(/</g,"&lt;")
                            .replace(/"/g,"&quot;"); }
+function looksLikeJSON(text){ try{ JSON.parse(text); return true; }catch{ return false; } }
